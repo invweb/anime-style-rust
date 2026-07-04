@@ -1,0 +1,8 @@
+/target
+*.png
+*.jpg
+*.jpeg
+*.gif
+models/
+/tmp/
+nohup.out

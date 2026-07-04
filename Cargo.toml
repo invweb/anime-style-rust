@@ -1,0 +1,30 @@
+[package]
+name = "anime-style-rust"
+version = "0.1.0"
+edition = "2021"
+description = "Anime-style image generator using local diffusion models"
+
+[[bin]]
+name = "anime-cli"
+path = "src/main.rs"
+
+[[bin]]
+name = "anime-server"
+path = "src/server.rs"
+
+[dependencies]
+clap = { version = "4", features = ["derive"] }
+candle-core = { version = "0.8", features = ["metal"] }
+candle-nn = { version = "0.8", features = ["metal"] }
+candle-transformers = { version = "0.8", features = ["metal"] }
+image = "0.25"
+anyhow = "1"
+axum = { version = "0.8", features = ["multipart"] }
+tokio = { version = "1", features = ["full"] }
+tower-http = { version = "0.6", features = ["fs", "cors"] }
+tokenizers = "0.21"
+hf-hub = "0.3"
+rand = "0.8"
+base64 = "0.22"
+tokio-stream = "0.1"
+futures = "0.3"
