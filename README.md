@@ -35,7 +35,7 @@ Prompt: `Gorgeous girl`
 
 ### Image-to-Image
 
-Input → Anime-styled output with prompt: `anime style, sakura`
+Input → Anime-styled output
 
 ![Input](test_input.png)
 ![Output](img2img_metal.png)
