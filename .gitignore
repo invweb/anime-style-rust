@@ -1,8 +1,7 @@
 /target
-*.png
+models/
 *.jpg
 *.jpeg
 *.gif
-models/
 /tmp/
 nohup.out
