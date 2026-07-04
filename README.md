@@ -29,6 +29,10 @@ Prompt: `anime girl, cherry blossoms, beautiful, detailed`
 
 ![Text-to-Image Result](metal_test.png)
 
+Prompt: `Gorgeous girl`
+
+![Text-to-Image Result](girl.png)
+
 ### Image-to-Image
 
 Input → Anime-styled output with prompt: `anime style, sakura`
