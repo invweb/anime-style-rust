@@ -7,31 +7,50 @@
     <style>
         * { box-sizing: border-box; margin: 0; padding: 0; }
         body { font-family: system-ui, sans-serif; background: #1a1a2e; color: #eee; min-height: 100vh; display: flex; flex-direction: column; align-items: center; padding: 2rem; }
-        h1 { margin-bottom: 2rem; color: #e94560; }
-        .container { display: flex; gap: 2rem; flex-wrap: wrap; justify-content: center; }
-        .panel { background: #16213e; border-radius: 12px; padding: 1.5rem; text-align: center; }
+        h1 { margin-bottom: 0.5rem; color: #e94560; }
+        .subtitle { margin-bottom: 2rem; color: #888; font-size: 0.9rem; }
+        .container { display: flex; gap: 2rem; flex-wrap: wrap; justify-content: center; max-width: 800px; width: 100%; }
+        .panel { background: #16213e; border-radius: 12px; padding: 1.5rem; text-align: center; flex: 1; min-width: 320px; }
         .panel h2 { margin-bottom: 1rem; font-size: 1.1rem; }
         img { max-width: 300px; max-height: 300px; border-radius: 8px; display: block; margin: 0 auto 1rem; }
         .placeholder { width: 300px; height: 300px; background: #0f3460; border-radius: 8px; display: flex; align-items: center; justify-content: center; color: #666; margin: 0 auto 1rem; }
-        input[type="file"] { margin-bottom: 1rem; }
-        button { background: #e94560; color: #fff; border: none; padding: 0.75rem 2rem; border-radius: 8px; font-size: 1rem; cursor: pointer; transition: background 0.2s; }
+        textarea { width: 100%; min-height: 60px; padding: 0.75rem; border-radius: 8px; border: 1px solid #333; background: #0f3460; color: #eee; font-size: 0.95rem; resize: vertical; margin-bottom: 1rem; font-family: inherit; }
+        textarea::placeholder { color: #666; }
+        input[type="file"] { margin-bottom: 1rem; width: 100%; }
+        .or-divider { color: #666; margin: 0.5rem 0; font-size: 0.85rem; }
+        .btn-row { display: flex; gap: 0.5rem; justify-content: center; flex-wrap: wrap; }
+        button { background: #e94560; color: #fff; border: none; padding: 0.75rem 1.5rem; border-radius: 8px; font-size: 1rem; cursor: pointer; transition: background 0.2s; }
         button:hover { background: #c73e54; }
         button:disabled { background: #555; cursor: not-allowed; }
-        #status { margin-top: 1rem; color: #aaa; }
-        .progress-container { width: 300px; height: 8px; background: #0f3460; border-radius: 4px; margin: 1rem auto 0; overflow: hidden; display: none; }
+        button.secondary { background: #0f3460; border: 1px solid #333; }
+        button.secondary:hover { background: #1a4a7a; }
+        #status { margin-top: 1rem; color: #aaa; font-size: 0.9rem; }
+        .progress-container { width: 100%; height: 8px; background: #0f3460; border-radius: 4px; margin: 1rem auto 0; overflow: hidden; display: none; }
         .progress-bar { height: 100%; background: #e94560; border-radius: 4px; width: 0%; transition: width 0.3s ease; }
         .progress-text { font-size: 0.85rem; color: #e94560; margin-top: 0.5rem; display: none; }
     </style>
 </head>
 <body>
     <h1>Anime Style Generator</h1>
+    <p class="subtitle">Text-to-Image & Image-to-Image via Stable Diffusion v1.5</p>
     <div class="container">
         <div class="panel">
             <h2>Input</h2>
-            <div id="input-preview" class="placeholder">No image</div>
+            <textarea id="prompt-input" placeholder="Describe what to generate: anime girl, cherry blossoms, sunset..."></textarea>
+
+            <div class="btn-row">
+                <button id="generate-btn">Generate from Text</button>
+            </div>
+
+            <div class="or-divider">— or upload a photo to stylize —</div>
+
+            <div id="input-preview" class="placeholder" style="width:250px;height:250px;">No image</div>
             <input type="file" id="file-input" accept="image/*">
-            <br>
-            <button id="process-btn" disabled>Process</button>
+
+            <div class="btn-row">
+                <button id="process-btn" class="secondary" disabled>Transform Photo</button>
+            </div>
+
             <div class="progress-container" id="progress-container">
                 <div class="progress-bar" id="progress-bar"></div>
             </div>
@@ -45,6 +64,8 @@
     <p id="status"></p>
 
     <script>
+        const promptInput = document.getElementById('prompt-input');
+        const generateBtn = document.getElementById('generate-btn');
         const fileInput = document.getElementById('file-input');
         const processBtn = document.getElementById('process-btn');
         const inputPreview = document.getElementById('input-preview');
@@ -64,74 +85,113 @@
             }
         });
 
-        processBtn.addEventListener('click', async () => {
-            if (!selectedFile) return;
-            processBtn.disabled = true;
-            status.textContent = 'Uploading...';
-            outputPreview.innerHTML = '<div class="placeholder">Processing...</div>';
-
+        function resetProgress() {
             progressContainer.style.display = 'block';
             progressText.style.display = 'block';
             progressBar.style.width = '0%';
             progressText.textContent = 'Starting...';
+        }
+
+        async function handleSSE(res) {
+            const reader = res.body.getReader();
+            const decoder = new TextDecoder();
+            let buffer = '';
+            let eventType = '';
+
+            while (true) {
+                const { done, value } = await reader.read();
+                if (done) break;
+
+                buffer += decoder.decode(value, { stream: true });
+                const lines = buffer.split('\n');
+                buffer = lines.pop();
+
+                for (const line of lines) {
+                    if (line.startsWith('event:')) {
+                        eventType = line.slice(7).trim();
+                    } else if (line.startsWith('data:')) {
+                        const data = line.slice(5).trim();
+                        if (eventType === 'step') {
+                            const [step, total, dt] = data.split('|');
+                            const stepNum = parseInt(step);
+                            const totalNum = parseInt(total);
+                            const pct = Math.round((stepNum / totalNum) * 100);
+                            progressBar.style.width = pct + '%';
+                            progressText.textContent = `Step ${stepNum}/${totalNum} (${dt}s)`;
+                            status.textContent = `Denoising... ${pct}%`;
+                        } else if (eventType === 'progress') {
+                            progressText.textContent = data === 'encoding' ? 'Encoding prompt...' :
+                                data === 'decoding' ? 'Decoding image...' : data;
+                            status.textContent = progressText.textContent;
+                        } else if (eventType === 'done') {
+                            const imgBytes = atob(data);
+                            const arr = new Uint8Array(imgBytes.length);
+                            for (let i = 0; i < imgBytes.length; i++) arr[i] = imgBytes.charCodeAt(i);
+                            const blob = new Blob([arr], { type: 'image/png' });
+                            const url = URL.createObjectURL(blob);
+                            outputPreview.innerHTML = `<img src="${url}">`;
+                            progressBar.style.width = '100%';
+                            progressText.textContent = 'Done!';
+                            status.textContent = 'Done!';
+                        } else if (eventType === 'error') {
+                            status.textContent = 'Error: ' + data;
+                            outputPreview.innerHTML = '<div class="placeholder">Error</div>';
+                        }
+                    }
+                }
+            }
+        }
+
+        generateBtn.addEventListener('click', async () => {
+            const prompt = promptInput.value.trim();
+            if (!prompt) {
+                promptInput.focus();
+                return;
+            }
+
+            generateBtn.disabled = true;
+            processBtn.disabled = true;
+            status.textContent = 'Generating...';
+            outputPreview.innerHTML = '<div class="placeholder">Processing...</div>';
+            resetProgress();
+
+            try {
+                const res = await fetch('/generate-stream', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ prompt }),
+                });
+                await handleSSE(res);
+            } catch (err) {
+                status.textContent = 'Error: ' + err.message;
+                outputPreview.innerHTML = '<div class="placeholder">Error</div>';
+            }
+
+            generateBtn.disabled = false;
+            processBtn.disabled = !selectedFile;
+        });
+
+        processBtn.addEventListener('click', async () => {
+            if (!selectedFile) return;
+            processBtn.disabled = true;
+            generateBtn.disabled = true;
+            status.textContent = 'Uploading...';
+            outputPreview.innerHTML = '<div class="placeholder">Processing...</div>';
+            resetProgress();
 
             const formData = new FormData();
             formData.append('image', selectedFile);
 
             try {
                 const res = await fetch('/process-stream', { method: 'POST', body: formData });
-                const reader = res.body.getReader();
-                const decoder = new TextDecoder();
-                let buffer = '';
-
-                while (true) {
-                    const { done, value } = await reader.read();
-                    if (done) break;
-
-                    buffer += decoder.decode(value, { stream: true });
-                    const lines = buffer.split('\n');
-                    buffer = lines.pop();
-
-                    for (const line of lines) {
-                        if (line.startsWith('event:')) {
-                            var eventType = line.slice(7).trim();
-                        } else if (line.startsWith('data:')) {
-                            var data = line.slice(5).trim();
-                            if (eventType === 'step') {
-                                const [step, total, dt] = data.split('|');
-                                const stepNum = parseInt(step);
-                                const totalNum = parseInt(total);
-                                const pct = Math.round((stepNum / totalNum) * 100);
-                                progressBar.style.width = pct + '%';
-                                progressText.textContent = `Step ${stepNum}/${totalNum} (${dt}s)`;
-                                status.textContent = `Denoising... ${pct}%`;
-                            } else if (eventType === 'progress') {
-                                progressText.textContent = data === 'encoding' ? 'Encoding prompt...' :
-                                    data === 'decoding' ? 'Decoding image...' : data;
-                                status.textContent = progressText.textContent;
-                            } else if (eventType === 'done') {
-                                const imgBytes = atob(data);
-                                const arr = new Uint8Array(imgBytes.length);
-                                for (let i = 0; i < imgBytes.length; i++) arr[i] = imgBytes.charCodeAt(i);
-                                const blob = new Blob([arr], { type: 'image/png' });
-                                const url = URL.createObjectURL(blob);
-                                outputPreview.innerHTML = `<img src="${url}">`;
-                                progressBar.style.width = '100%';
-                                progressText.textContent = 'Done!';
-                                status.textContent = 'Done!';
-                            } else if (eventType === 'error') {
-                                status.textContent = 'Error: ' + data;
-                                outputPreview.innerHTML = '<div class="placeholder">Error</div>';
-                            }
-                        }
-                    }
-                }
+                await handleSSE(res);
             } catch (err) {
                 status.textContent = 'Error: ' + err.message;
                 outputPreview.innerHTML = '<div class="placeholder">Error</div>';
             }
 
             processBtn.disabled = false;
+            generateBtn.disabled = false;
         });
     </script>
 </body>
