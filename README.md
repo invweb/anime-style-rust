@@ -37,8 +37,7 @@ Prompt: `Gorgeous girl`
 
 Input → Anime-styled output
 
-![Input](test_input.png)
-![Output](img2img_metal.png)
+![Input/Output](boy.png)
 
 ## Quick Start
 
